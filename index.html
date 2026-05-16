@@ -476,14 +476,20 @@
         }
 
         function resetData(type) {
-            if (confirm("Réinitialiser ce classement ?")) {
-                if (type === 'my') {
-                    myState = [...defaultData];
-                    processMove(false);
-                } else {
-                    officialState = [...defaultData];
-                    processMove(true);
+            const code = prompt("Veuillez entrer le code administrateur pour réinitialiser :");
+            
+            if (code === "7777") {
+                if (confirm("Admin autorisé. Voulez-vous vraiment réinitialiser ce classement ?")) {
+                    if (type === 'my') {
+                        myState = [...defaultData];
+                        processMove(false);
+                    } else {
+                        officialState = [...defaultData];
+                        processMove(true);
+                    }
                 }
+            } else if (code !== null) {
+                alert("Code incorrect ! Accès refusé.");
             }
         }
 
