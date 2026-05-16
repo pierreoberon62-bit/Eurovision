@@ -81,6 +81,21 @@
             width: 100%;
         }
 
+        /* --- Bannière Mode Local --- */
+        #mode-banner {
+            background-color: #ff9800;
+            color: #1a1a2e;
+            width: 100%;
+            max-width: 800px;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            display: none;
+        }
+
         /* --- Système d'onglets --- */
         .tabs {
             display: flex;
@@ -139,19 +154,6 @@
             font-size: 0.8rem;
         }
 
-        .btn-sync {
-            background-color: #007bff;
-            width: 100%;
-            font-size: 1.1rem;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
         .warning-text {
             color: #ff9800;
             font-size: 0.85rem;
@@ -182,9 +184,11 @@
 
         .move-btn {
             background: none; border: none; color: #aaa; font-size: 1.2rem; cursor: pointer; padding: 5px; width: 100%;
+            display: flex; justify-content: center; align-items: center;
         }
 
         .move-btn:active { color: var(--accent); }
+        .move-btn:disabled { color: #333; pointer-events: none; }
 
         .rank-select {
             background-color: var(--accent); color: white; border: none; border-radius: 4px; padding: 4px; font-weight: bold; font-size: 0.9rem; text-align: center; width: 35px; appearance: none; -webkit-appearance: none;
@@ -231,15 +235,18 @@
 
     <h1>Eurovision 2026</h1>
 
+    <div id="mode-banner">Mode Solo/Local (Erreur de connexion à Firebase)</div>
+
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tab-my-ranking', this)">Mon Classement</button>
-        <button class="tab-btn" onclick="switchTab('tab-leaderboard', this)">Tableau des Scores</button>
+        <button class="tab-btn" id="btn-tab-leaderboard" onclick="switchTab('tab-leaderboard', this)">Tableau des Scores</button>
         <button class="tab-btn" onclick="switchTab('tab-official', this)">Résultats Officiels</button>
     </div>
 
     <div id="tab-my-ranking" class="tab-content active">
         <div class="controls">
-            <span>Connecté en tant que : <b id="display-username" style="color:var(--accent)">...</b></span>
+            <span>Connecté : <b id="display-username" style="color:var(--accent)">...</b></span>
+            <button class="btn-action" onclick="resetData('my')">Réinitialiser l'ordre</button>
         </div>
         <div id="score-board" style="display: none;"></div>
         <ul id="my-list"></ul>
@@ -247,39 +254,30 @@
 
     <div id="tab-leaderboard" class="tab-content">
         <h2 style="text-align:center; color:white;">Classement Général</h2>
-        <p style="text-align:center; color:#aaa; font-size:0.9rem;">Les scores se mettent à jour automatiquement en fonction du vrai classement.</p>
         <div id="leaderboard-box">
             </div>
     </div>
 
     <div id="tab-official" class="tab-content">
-        <p class="warning-text">⚠️ Attention : Si tu modifies ce classement, il changera le classement officiel sur les téléphones de tous tes amis en direct ! À utiliser par le maître du jeu.</p>
+        <p class="warning-text" id="official-warning">⚠️ Attention : Modifier ce classement changera les résultats en temps réel pour tous vos amis.</p>
         
         <div class="controls">
-            <span>Vrai Classement :</span>
-            <button class="btn-action" onclick="resetOfficial()">Réinitialiser</button>
+            <span>Vrai Classement Final :</span>
+            <button class="btn-action" onclick="resetData('official')">Réinitialiser l'officiel</button>
         </div>
         <ul id="official-list"></ul>
     </div>
 
     <script>
-        // --- METS TA CONFIGURATION FIREBASE ICI ---
         const firebaseConfig = {
-            apiKey: "TON_API_KEY",
-            authDomain: "TON_PROJET.firebaseapp.com",
-            databaseURL: "https://TON_PROJET.firebaseio.com",
-            projectId: "TON_PROJET",
-            storageBucket: "TON_PROJET.appspot.com",
-            messagingSenderId: "TON_ID",
-            appId: "TON_APP_ID"
+            apiKey: "AIzaSyCCHQQbX0jJtgEliea4ELZ8vi4T6awhW3k",
+            authDomain: "babyfoot-dae17.firebaseapp.com",
+            databaseURL: "https://babyfoot-dae17-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "babyfoot-dae17",
+            storageBucket: "babyfoot-dae17.firebasestorage.app",
+            messagingSenderId: "203273116160",
+            appId: "1:203273116160:web:8bcad4501d6d8fccb096e5"
         };
-        // ------------------------------------------
-
-        // Initialisation Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const db = firebase.database();
 
         const defaultData = [
             { id: '1', country: 'Danemark', artist: 'Seren Torpegaard Lund', song: 'Før Vi Går Hjem' },
@@ -309,12 +307,30 @@
             { id: '25', country: 'Autriche', artist: 'COSMÖ', song: 'Tanzschein' }
         ];
 
+        let db = null;
+        let isFirebaseReady = false;
         let currentUser = localStorage.getItem('eurovision_user');
-        let myState = [];
-        let officialState = [...defaultData];
+        
+        let myState = JSON.parse(localStorage.getItem('eurovision2026_local_mystate')) || [...defaultData];
+        let officialState = JSON.parse(localStorage.getItem('eurovision2026_local_officialstate')) || [...defaultData];
         let notes = JSON.parse(localStorage.getItem('eurovision2026_notes')) || {};
 
-        // Vérification de connexion au chargement
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            db = firebase.database();
+            isFirebaseReady = true;
+        } catch (e) {
+            console.error("Échec d'initialisation Firebase, bascule en local.", e);
+        }
+
+        if (!isFirebaseReady) {
+            document.getElementById('mode-banner').style.display = 'block';
+            document.getElementById('btn-tab-leaderboard').style.display = 'none';
+            document.getElementById('official-warning').style.display = 'none';
+        }
+
         if (currentUser) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('display-username').textContent = currentUser;
@@ -323,50 +339,48 @@
 
         function login() {
             const input = document.getElementById('username-input').value.trim();
-            if (input.length > 2) {
+            if (input.length > 1) {
                 currentUser = input;
                 localStorage.setItem('eurovision_user', currentUser);
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('display-username').textContent = currentUser;
                 initApp();
             } else {
-                alert("Choisis un pseudo d'au moins 3 lettres !");
+                alert("Choisis un pseudo !");
             }
         }
 
         function initApp() {
-            // 1. Écouter le classement officiel en direct
-            db.ref('official_ranking').on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    officialState = data.map(id => defaultData.find(d => d.id === id));
-                } else {
-                    officialState = [...defaultData]; // Par défaut si vide
-                }
-                renderList(officialState, 'official-list', true);
-                calculateAndPushScore(); // Recalcule ton score si l'officiel change
-            });
+            if (isFirebaseReady) {
+                db.ref('official_ranking').on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) officialState = data.map(id => defaultData.find(d => d.id === id));
+                    localStorage.setItem('eurovision2026_local_officialstate', JSON.stringify(officialState));
+                    renderList(officialState, 'official-list', true);
+                    calculateScore();
+                });
 
-            // 2. Charger ton classement personnel depuis Firebase (ou créer un par défaut)
-            db.ref('users/' + currentUser + '/ranking').once('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    myState = data.map(id => defaultData.find(d => d.id === id));
-                } else {
-                    myState = [...defaultData];
-                    syncMyRankingToFirebase();
-                }
+                db.ref('users/' + currentUser + '/ranking').once('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        myState = data.map(id => defaultData.find(d => d.id === id));
+                    } else {
+                        // Envoi initial si le joueur est nouveau
+                        db.ref('users/' + currentUser + '/ranking').set(myState.map(c => c.id));
+                    }
+                    renderList(myState, 'my-list', false);
+                    calculateScore();
+                });
+
+                db.ref('users').on('value', (snapshot) => {
+                    const usersData = snapshot.val();
+                    if (usersData) updateLeaderboard(usersData);
+                });
+            } else {
                 renderList(myState, 'my-list', false);
-                calculateAndPushScore();
-            });
-
-            // 3. Écouter les scores de tous les joueurs pour le leaderboard
-            db.ref('users').on('value', (snapshot) => {
-                const usersData = snapshot.val();
-                if (usersData) {
-                    updateLeaderboard(usersData);
-                }
-            });
+                renderList(officialState, 'official-list', true);
+                calculateScore();
+            }
         }
 
         function switchTab(tabId, btnElement) {
@@ -379,21 +393,17 @@
         function renderList(stateArray, listId, isOfficial) {
             const listElement = document.getElementById(listId);
             listElement.innerHTML = '';
-            
             if(!stateArray || stateArray.length === 0) return;
-
-            const total = stateArray.length;
 
             stateArray.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = 'card';
                 
                 let optionsHtml = '';
-                for(let i = 1; i <= total; i++) {
+                for(let i = 1; i <= 25; i++) {
                     optionsHtml += `<option value="${i}" ${i === index + 1 ? 'selected' : ''}>${i}</option>`;
                 }
 
-                // Les notes sont uniquement visibles sur le classement perso
                 let extraContent = isOfficial 
                     ? '' 
                     : `<textarea placeholder="Notes sur la prestation..." onchange="saveNote('${item.id}', this.value)">${notes[item.id] || ''}</textarea>`;
@@ -406,7 +416,7 @@
                         <select class="rank-select" onchange="jumpItem(${index}, this.value, ${isOfficial})">
                             ${optionsHtml}
                         </select>
-                        <button class="move-btn" onclick="moveItem(${index}, 1, ${isOfficial})" ${index === total - 1 ? 'disabled' : ''}>▼</button>
+                        <button class="move-btn" onclick="moveItem(${index}, 1, ${isOfficial})" ${index === 24 ? 'disabled' : ''}>▼</button>
                     </div>
                     <div class="content">
                         <div class="${infoClass}">
@@ -447,29 +457,38 @@
 
         function processMove(isOfficial) {
             if (isOfficial) {
-                const idArray = officialState.map(c => c.id);
-                db.ref('official_ranking').set(idArray);
+                if (isFirebaseReady) {
+                    db.ref('official_ranking').set(officialState.map(c => c.id));
+                } else {
+                    localStorage.setItem('eurovision2026_local_officialstate', JSON.stringify(officialState));
+                    renderList(officialState, 'official-list', true);
+                    calculateScore();
+                }
             } else {
-                syncMyRankingToFirebase();
+                if (isFirebaseReady) {
+                    db.ref('users/' + currentUser + '/ranking').set(myState.map(c => c.id));
+                } else {
+                    localStorage.setItem('eurovision2026_local_mystate', JSON.stringify(myState));
+                }
                 renderList(myState, 'my-list', false);
-                calculateAndPushScore();
+                calculateScore();
             }
         }
 
-        function syncMyRankingToFirebase() {
-            const idArray = myState.map(c => c.id);
-            db.ref('users/' + currentUser + '/ranking').set(idArray);
-        }
-
-        function resetOfficial() {
-            if (confirm("Attention, cela va effacer le classement officiel de tout le monde. Continuer ?")) {
-                const defaultIds = defaultData.map(c => c.id);
-                db.ref('official_ranking').set(defaultIds);
+        function resetData(type) {
+            if (confirm("Réinitialiser ce classement ?")) {
+                if (type === 'my') {
+                    myState = [...defaultData];
+                    processMove(false);
+                } else {
+                    officialState = [...defaultData];
+                    processMove(true);
+                }
             }
         }
 
-        function calculateAndPushScore() {
-            if (!myState || myState.length === 0 || !officialState || officialState.length === 0) return;
+        function calculateScore() {
+            if (!myState.length || !officialState.length) return;
 
             let score = 0;
             let detailsHtml = '';
@@ -481,7 +500,7 @@
                 let pointsGained = 0;
                 if (diff === 0) pointsGained = 10;
                 else if (diff === 1) pointsGained = 8;
-                else if (diff >= 2 && diff <= 8) pointsGained = 10 - diff - 1; 
+                else if (diff >= 2 && diff <= 8) pointsGained = 9 - diff; 
                 else pointsGained = 0;
 
                 let bonus = 0;
@@ -491,34 +510,34 @@
                     if (myIndex === 0) { bonus = 10; bonusLabel = "⭐ 1er (+10)"; }
                     if (myIndex === 1) { bonus = 10; bonusLabel = "⭐ 2e (+10)"; }
                     if (myIndex === 2) { bonus = 10; bonusLabel = "⭐ 3e (+10)"; }
-                    if (myIndex === myState.length - 3) { bonus = 10; bonusLabel = "⭐ 23e (+10)"; }
-                    if (myIndex === myState.length - 2) { bonus = 10; bonusLabel = "⭐ 24e (+10)"; }
-                    if (myIndex === myState.length - 1) { bonus = 10; bonusLabel = "⭐ 25e (+10)"; }
+                    if (myIndex === 22) { bonus = 10; bonusLabel = "⭐ 23e (+10)"; }
+                    if (myIndex === 23) { bonus = 10; bonusLabel = "⭐ 24e (+10)"; }
+                    if (myIndex === 24) { bonus = 10; bonusLabel = "⭐ 25e (+10)"; }
                 }
 
                 let totalPointsLine = pointsGained + bonus;
                 score += totalPointsLine;
                 
                 let color = totalPointsLine > 0 ? 'var(--success)' : '#777';
-                let ptsText = totalPointsLine > 0 ? `+${totalPointsLine} pts` : `0 pt`;
+                let ptsText = totalPointsLine > 0 ? `+${pointsGained} pts` : `0 pt`;
 
                 detailsHtml += `
                     <div class="score-detail">
-                        <span style="flex:1;">${myIndex + 1}. ${myCountry.country}</span>
-                        <span style="flex:1; text-align:right; color:${color}">
+                        <span>${myIndex + 1}. ${myCountry.country}</span>
+                        <span style="text-align:right; color:${color}">
                             (Vrai: ${officialIndex + 1}) <b>${ptsText}</b>
+                            ${bonusLabel ? `<br><span class="bonus-badge">${bonusLabel}</span>` : ''}
                         </span>
                     </div>`;
             });
 
-            // Envoie le score calculé dans Firebase
-            db.ref('users/' + currentUser + '/score').set(score);
+            if (isFirebaseReady) {
+                db.ref('users/' + currentUser + '/score').set(score);
+            }
 
-            // Affiche le détail sur ton onglet "Mon classement"
             const board = document.getElementById('score-board');
-            board.innerHTML = `<h2 class="score-title">Ton Score Actuel : ${score} Pts</h2>
-                               <div style="font-size:0.8rem; color:#aaa; text-align:center; margin-bottom:10px;">En direct selon le classement officiel</div>
-                               <details><summary style="cursor:pointer; color:var(--accent); text-align:center;">Voir le détail des points</summary>
+            board.innerHTML = `<h2 class="score-title">Score : ${score} Pts</h2>
+                               <details><summary style="cursor:pointer; color:var(--accent); text-align:center;">Détail des points</summary>
                                ${detailsHtml}</details>`;
             board.style.display = 'block';
         }
@@ -526,26 +545,15 @@
         function updateLeaderboard(usersData) {
             const leaderboardBox = document.getElementById('leaderboard-box');
             leaderboardBox.innerHTML = '';
-
-            // Convertir l'objet Firebase en tableau pour le trier
             let players = [];
             for (let user in usersData) {
-                players.push({
-                    name: user,
-                    score: usersData[user].score || 0
-                });
+                players.push({ name: user, score: usersData[user].score || 0 });
             }
-
-            // Trier par ordre décroissant (plus grand score en premier)
             players.sort((a, b) => b.score - a.score);
-
             players.forEach((player, index) => {
                 const div = document.createElement('div');
                 div.className = 'leaderboard-item';
-                div.innerHTML = `
-                    <span>${index + 1}. ${player.name}</span>
-                    <span style="color:var(--success)">${player.score} pts</span>
-                `;
+                div.innerHTML = `<span>${index + 1}. ${player.name}</span><span style="color:var(--success)">${player.score} pts</span>`;
                 leaderboardBox.appendChild(div);
             });
         }
