@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eurovision 2026 - En direct avec les amis !</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --accent: #e94560;
+            --success: #4ecca3;
+            --text: #ededed;
+            --card-bg: #2a2a4a;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--primary);
+            color: var(--text);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: var(--accent);
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.8rem;
+        }
+
+        /* --- Écran de Connexion --- */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--primary);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .login-box {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border: 1px solid var(--accent);
+            background-color: var(--secondary);
+            color: white;
+            font-size: 1.1rem;
+            box-sizing: border-box;
+        }
+
+        .login-box button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        /* --- Système d'onglets --- */
+        .tabs {
+            display: flex;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+            background-color: var(--secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 5px;
+            background: none;
+            border: none;
+            color: #aaa;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .tab-btn.active {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* --- Éléments UI --- */
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .btn-action {
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        .btn-sync {
+            background-color: #007bff;
+            width: 100%;
+            font-size: 1.1rem;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .warning-text {
+            color: #ff9800;
+            font-size: 0.85rem;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        ul { list-style-type: none; padding: 0; margin: 0; }
+
+        .card {
+            background-color: var(--card-bg);
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .rank-controls {
+            background-color: var(--secondary);
+            min-width: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+        }
+
+        .move-btn {
+            background: none; border: none; color: #aaa; font-size: 1.2rem; cursor: pointer; padding: 5px; width: 100%;
+        }
+
+        .move-btn:active { color: var(--accent); }
+
+        .rank-select {
+            background-color: var(--accent); color: white; border: none; border-radius: 4px; padding: 4px; font-weight: bold; font-size: 0.9rem; text-align: center; width: 35px; appearance: none; -webkit-appearance: none;
+        }
+
+        .content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+
+        .info { display: flex; flex-direction: column; }
+        .info.with-border { border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+
+        .country { font-size: 1.1rem; font-weight: bold; color: white; }
+        .artist-song { font-size: 0.85rem; color: #ccc; margin-top: 2px; }
+
+        textarea {
+            width: 100%; background-color: #1f1f3a; color: var(--text); border: 1px solid #3f3f6a; border-radius: 4px; padding: 8px; font-family: inherit; font-size: 0.9rem; resize: none; min-height: 50px; box-sizing: border-box;
+        }
+
+        #score-board, #leaderboard-box {
+            background-color: var(--card-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 2px solid var(--success);
+        }
+
+        .score-title { text-align: center; color: var(--success); margin-top: 0; font-size: 1.5rem; }
+        .score-detail { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9rem; }
+        .bonus-badge { color: #ffd700; font-weight: bold; font-size: 0.8rem; }
+        
+        .leaderboard-item {
+            display: flex; justify-content: space-between; padding: 12px; background-color: var(--secondary); margin-bottom: 8px; border-radius: 5px; font-size: 1.1rem; font-weight: bold;
+        }
+        .leaderboard-item:nth-child(1) { border-left: 5px solid gold; }
+        .leaderboard-item:nth-child(2) { border-left: 5px solid silver; }
+        .leaderboard-item:nth-child(3) { border-left: 5px solid #cd7f32; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-box">
+            <h2>Bienvenue à l'Eurovision !</h2>
+            <p>Choisis un pseudo pour jouer avec tes amis.</p>
+            <input type="text" id="username-input" placeholder="Ton pseudo...">
+            <button onclick="login()">C'est parti !</button>
+        </div>
+    </div>
+
+    <h1>Eurovision 2026</h1>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-my-ranking', this)">Mon Classement</button>
+        <button class="tab-btn" onclick="switchTab('tab-leaderboard', this)">Tableau des Scores</button>
+        <button class="tab-btn" onclick="switchTab('tab-official', this)">Résultats Officiels</button>
+    </div>
+
+    <div id="tab-my-ranking" class="tab-content active">
+        <div class="controls">
+            <span>Connecté en tant que : <b id="display-username" style="color:var(--accent)">...</b></span>
+        </div>
+        <div id="score-board" style="display: none;"></div>
+        <ul id="my-list"></ul>
+    </div>
+
+    <div id="tab-leaderboard" class="tab-content">
+        <h2 style="text-align:center; color:white;">Classement Général</h2>
+        <p style="text-align:center; color:#aaa; font-size:0.9rem;">Les scores se mettent à jour automatiquement en fonction du vrai classement.</p>
+        <div id="leaderboard-box">
+            </div>
+    </div>
+
+    <div id="tab-official" class="tab-content">
+        <p class="warning-text">⚠️ Attention : Si tu modifies ce classement, il changera le classement officiel sur les téléphones de tous tes amis en direct ! À utiliser par le maître du jeu.</p>
+        
+        <div class="controls">
+            <span>Vrai Classement :</span>
+            <button class="btn-action" onclick="resetOfficial()">Réinitialiser</button>
+        </div>
+        <ul id="official-list"></ul>
+    </div>
+
+    <script>
+        // --- METS TA CONFIGURATION FIREBASE ICI ---
+        const firebaseConfig = {
+            apiKey: "TON_API_KEY",
+            authDomain: "TON_PROJET.firebaseapp.com",
+            databaseURL: "https://TON_PROJET.firebaseio.com",
+            projectId: "TON_PROJET",
+            storageBucket: "TON_PROJET.appspot.com",
+            messagingSenderId: "TON_ID",
+            appId: "TON_APP_ID"
+        };
+        // ------------------------------------------
+
+        // Initialisation Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        const defaultData = [
+            { id: '1', country: 'Danemark', artist: 'Seren Torpegaard Lund', song: 'Før Vi Går Hjem' },
+            { id: '2', country: 'Allemagne', artist: 'Sarah Engels', song: 'Fire' },
+            { id: '3', country: 'Israël', artist: 'Noam Bettan', song: 'Michelle' },
+            { id: '4', country: 'Belgique', artist: 'ESSYLA', song: 'Dancing on the ice' },
+            { id: '5', country: 'Albanie', artist: 'Alis', song: 'Nën' },
+            { id: '6', country: 'Grèce', artist: 'Akylas', song: 'Ferto' },
+            { id: '7', country: 'Ukraine', artist: 'LELEKA', song: 'Ridnym' },
+            { id: '8', country: 'Australie', artist: 'Delta Goodrem', song: 'Eclipse' },
+            { id: '9', country: 'Serbie', artist: 'LAVINA', song: 'Kraj Mene' },
+            { id: '10', country: 'Malte', artist: 'AIDAN', song: 'Bella' },
+            { id: '11', country: 'Tchéquie', artist: 'Daniel Zizka', song: 'CROSSROADS' },
+            { id: '12', country: 'Bulgarie', artist: 'DARA', song: 'Bangaranga' },
+            { id: '13', country: 'Croatie', artist: 'LELEK', song: 'Andromeda' },
+            { id: '14', country: 'Royaume-Uni', artist: 'LOOK MUM NO COMPUTER', song: 'Eins, Zwei, Drei' },
+            { id: '15', country: 'France', artist: 'Monroe', song: 'Regarde !' },
+            { id: '16', country: 'Moldavie', artist: 'Satoshi', song: 'Viva, Moldova!' },
+            { id: '17', country: 'Finlande', artist: 'Linda Lampenius x Pete Parkkonen', song: 'Liekinheitin' },
+            { id: '18', country: 'Pologne', artist: 'ALICJA', song: 'Pray' },
+            { id: '19', country: 'Lituanie', artist: 'Lion Ceccah', song: 'Sólo Quiero Más' },
+            { id: '20', country: 'Suède', artist: 'FELICIA', song: 'My System' },
+            { id: '21', country: 'Chypre', artist: 'Antigoni', song: 'JALLA' },
+            { id: '22', country: 'Italie', artist: 'Sal Da Vinci', song: 'Per Sempre Sì' },
+            { id: '23', country: 'Norvège', artist: 'JONAS LOVV', song: 'YA YA YA' },
+            { id: '24', country: 'Roumanie', artist: 'Alexandra Căpitănescu', song: 'Choke Me' },
+            { id: '25', country: 'Autriche', artist: 'COSMÖ', song: 'Tanzschein' }
+        ];
+
+        let currentUser = localStorage.getItem('eurovision_user');
+        let myState = [];
+        let officialState = [...defaultData];
+        let notes = JSON.parse(localStorage.getItem('eurovision2026_notes')) || {};
+
+        // Vérification de connexion au chargement
+        if (currentUser) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('display-username').textContent = currentUser;
+            initApp();
+        }
+
+        function login() {
+            const input = document.getElementById('username-input').value.trim();
+            if (input.length > 2) {
+                currentUser = input;
+                localStorage.setItem('eurovision_user', currentUser);
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('display-username').textContent = currentUser;
+                initApp();
+            } else {
+                alert("Choisis un pseudo d'au moins 3 lettres !");
+            }
+        }
+
+        function initApp() {
+            // 1. Écouter le classement officiel en direct
+            db.ref('official_ranking').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    officialState = data.map(id => defaultData.find(d => d.id === id));
+                } else {
+                    officialState = [...defaultData]; // Par défaut si vide
+                }
+                renderList(officialState, 'official-list', true);
+                calculateAndPushScore(); // Recalcule ton score si l'officiel change
+            });
+
+            // 2. Charger ton classement personnel depuis Firebase (ou créer un par défaut)
+            db.ref('users/' + currentUser + '/ranking').once('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    myState = data.map(id => defaultData.find(d => d.id === id));
+                } else {
+                    myState = [...defaultData];
+                    syncMyRankingToFirebase();
+                }
+                renderList(myState, 'my-list', false);
+                calculateAndPushScore();
+            });
+
+            // 3. Écouter les scores de tous les joueurs pour le leaderboard
+            db.ref('users').on('value', (snapshot) => {
+                const usersData = snapshot.val();
+                if (usersData) {
+                    updateLeaderboard(usersData);
+                }
+            });
+        }
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+
+        function renderList(stateArray, listId, isOfficial) {
+            const listElement = document.getElementById(listId);
+            listElement.innerHTML = '';
+            
+            if(!stateArray || stateArray.length === 0) return;
+
+            const total = stateArray.length;
+
+            stateArray.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'card';
+                
+                let optionsHtml = '';
+                for(let i = 1; i <= total; i++) {
+                    optionsHtml += `<option value="${i}" ${i === index + 1 ? 'selected' : ''}>${i}</option>`;
+                }
+
+                // Les notes sont uniquement visibles sur le classement perso
+                let extraContent = isOfficial 
+                    ? '' 
+                    : `<textarea placeholder="Notes sur la prestation..." onchange="saveNote('${item.id}', this.value)">${notes[item.id] || ''}</textarea>`;
+                
+                let infoClass = isOfficial ? 'info' : 'info with-border';
+
+                li.innerHTML = `
+                    <div class="rank-controls">
+                        <button class="move-btn" onclick="moveItem(${index}, -1, ${isOfficial})" ${index === 0 ? 'disabled' : ''}>▲</button>
+                        <select class="rank-select" onchange="jumpItem(${index}, this.value, ${isOfficial})">
+                            ${optionsHtml}
+                        </select>
+                        <button class="move-btn" onclick="moveItem(${index}, 1, ${isOfficial})" ${index === total - 1 ? 'disabled' : ''}>▼</button>
+                    </div>
+                    <div class="content">
+                        <div class="${infoClass}">
+                            <span class="country">${item.country}</span>
+                            <span class="artist-song"><strong>${item.artist}</strong></span>
+                        </div>
+                        ${extraContent}
+                    </div>
+                `;
+                listElement.appendChild(li);
+            });
+        }
+
+        function saveNote(id, text) {
+            notes[id] = text;
+            localStorage.setItem('eurovision2026_notes', JSON.stringify(notes));
+        }
+
+        function moveItem(index, direction, isOfficial) {
+            let state = isOfficial ? officialState : myState;
+            const newIndex = index + direction;
+            if (newIndex >= 0 && newIndex < state.length) {
+                const item = state.splice(index, 1)[0];
+                state.splice(newIndex, 0, item);
+                processMove(isOfficial);
+            }
+        }
+
+        function jumpItem(oldIndex, newIndexStr, isOfficial) {
+            let state = isOfficial ? officialState : myState;
+            const newIndex = parseInt(newIndexStr) - 1;
+            if (newIndex !== oldIndex && newIndex >= 0 && newIndex < state.length) {
+                const item = state.splice(oldIndex, 1)[0];
+                state.splice(newIndex, 0, item);
+                processMove(isOfficial);
+            }
+        }
+
+        function processMove(isOfficial) {
+            if (isOfficial) {
+                const idArray = officialState.map(c => c.id);
+                db.ref('official_ranking').set(idArray);
+            } else {
+                syncMyRankingToFirebase();
+                renderList(myState, 'my-list', false);
+                calculateAndPushScore();
+            }
+        }
+
+        function syncMyRankingToFirebase() {
+            const idArray = myState.map(c => c.id);
+            db.ref('users/' + currentUser + '/ranking').set(idArray);
+        }
+
+        function resetOfficial() {
+            if (confirm("Attention, cela va effacer le classement officiel de tout le monde. Continuer ?")) {
+                const defaultIds = defaultData.map(c => c.id);
+                db.ref('official_ranking').set(defaultIds);
+            }
+        }
+
+        function calculateAndPushScore() {
+            if (!myState || myState.length === 0 || !officialState || officialState.length === 0) return;
+
+            let score = 0;
+            let detailsHtml = '';
+            
+            myState.forEach((myCountry, myIndex) => {
+                let officialIndex = officialState.findIndex(o => o.id === myCountry.id);
+                let diff = Math.abs(myIndex - officialIndex);
+                
+                let pointsGained = 0;
+                if (diff === 0) pointsGained = 10;
+                else if (diff === 1) pointsGained = 8;
+                else if (diff >= 2 && diff <= 8) pointsGained = 10 - diff - 1; 
+                else pointsGained = 0;
+
+                let bonus = 0;
+                let bonusLabel = "";
+                
+                if (diff === 0) {
+                    if (myIndex === 0) { bonus = 10; bonusLabel = "⭐ 1er (+10)"; }
+                    if (myIndex === 1) { bonus = 10; bonusLabel = "⭐ 2e (+10)"; }
+                    if (myIndex === 2) { bonus = 10; bonusLabel = "⭐ 3e (+10)"; }
+                    if (myIndex === myState.length - 3) { bonus = 10; bonusLabel = "⭐ 23e (+10)"; }
+                    if (myIndex === myState.length - 2) { bonus = 10; bonusLabel = "⭐ 24e (+10)"; }
+                    if (myIndex === myState.length - 1) { bonus = 10; bonusLabel = "⭐ 25e (+10)"; }
+                }
+
+                let totalPointsLine = pointsGained + bonus;
+                score += totalPointsLine;
+                
+                let color = totalPointsLine > 0 ? 'var(--success)' : '#777';
+                let ptsText = totalPointsLine > 0 ? `+${totalPointsLine} pts` : `0 pt`;
+
+                detailsHtml += `
+                    <div class="score-detail">
+                        <span style="flex:1;">${myIndex + 1}. ${myCountry.country}</span>
+                        <span style="flex:1; text-align:right; color:${color}">
+                            (Vrai: ${officialIndex + 1}) <b>${ptsText}</b>
+                        </span>
+                    </div>`;
+            });
+
+            // Envoie le score calculé dans Firebase
+            db.ref('users/' + currentUser + '/score').set(score);
+
+            // Affiche le détail sur ton onglet "Mon classement"
+            const board = document.getElementById('score-board');
+            board.innerHTML = `<h2 class="score-title">Ton Score Actuel : ${score} Pts</h2>
+                               <div style="font-size:0.8rem; color:#aaa; text-align:center; margin-bottom:10px;">En direct selon le classement officiel</div>
+                               <details><summary style="cursor:pointer; color:var(--accent); text-align:center;">Voir le détail des points</summary>
+                               ${detailsHtml}</details>`;
+            board.style.display = 'block';
+        }
+
+        function updateLeaderboard(usersData) {
+            const leaderboardBox = document.getElementById('leaderboard-box');
+            leaderboardBox.innerHTML = '';
+
+            // Convertir l'objet Firebase en tableau pour le trier
+            let players = [];
+            for (let user in usersData) {
+                players.push({
+                    name: user,
+                    score: usersData[user].score || 0
+                });
+            }
+
+            // Trier par ordre décroissant (plus grand score en premier)
+            players.sort((a, b) => b.score - a.score);
+
+            players.forEach((player, index) => {
+                const div = document.createElement('div');
+                div.className = 'leaderboard-item';
+                div.innerHTML = `
+                    <span>${index + 1}. ${player.name}</span>
+                    <span style="color:var(--success)">${player.score} pts</span>
+                `;
+                leaderboardBox.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
